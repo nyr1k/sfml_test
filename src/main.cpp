@@ -5,6 +5,9 @@
 #include <filesystem>
 #include "shader.h"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 const float gradientRate = 0.01f;
 int first = 3, second = 10, third = 17;
 
@@ -62,7 +65,20 @@ int main()
 
     auto base = std::filesystem::current_path().parent_path()/"src";
     Shader ourShader((base/"shader.vs").c_str(), (base/"shader.fs").c_str());
-    
+
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load((base/"container.jpg").c_str(), &width, &height, &nrChannels, 0);
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    if(data) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cout <<  "Failed to load texture" << std::endl;
+    }
+    stbi_image_free(data);
+
     // run the main loop
     bool running = true;
     float red = 1.0f, green = 1.0f, blue = 1.0f; 
