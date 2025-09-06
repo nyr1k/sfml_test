@@ -1,19 +1,21 @@
-#include <iostream>
-#include <math.h>
 #include <glad/gl.h>
 #include <SFML/Window.hpp>
+#include <shader.h>
+#include <camera.h>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
+#include <iostream>
+#include <math.h>
 #include <filesystem>
-#include "shader.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
-const float gradientRate = 0.01f;
-int first = 3, second = 10, third = 17;
-
-void gradientTriangleVerticeOne(float *vertices);
-void gradientTriangleVerticeTwo(float *vertices);
-void gradientTriangleVerticeThree(float *vertices);
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
 
 int main()
 {
@@ -27,6 +29,7 @@ int main()
 
     sf::Window window(sf::VideoMode({800, 600}), "OpenGL", sf::Style::Default, sf::State::Windowed, settings);
     window.setVerticalSyncEnabled(true);
+    window.setMouseCursorVisible(false); // hide cursor
 
     // activate the window
     if (!window.setActive(true)) {
@@ -43,134 +46,151 @@ int main()
 
     std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
     glViewport(0, 0, 800, 600);
+    glEnable(GL_DEPTH_TEST);
 
-    // triangle 
-    float vertices[] =  {
-        -0.5f, -0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
-        0.5f, -0.5f, 0.0f, 0.0f, 1.0f, 0.0f, 
-        0.0f, 0.5f, 0.0f, 0.0f, 0.0f, 1.0f
+    float vertices[] = {
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 
+        0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 
+        0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 
+        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f, 
+
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+        0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+        0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+        0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f, 1.0f,
+
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+
+        0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+        0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+        0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+        0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
+        0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+        0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+        0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+        0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+        0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+        0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
+        0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+        0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
 
-    unsigned int VBO, VAO; 
+    unsigned int VBO; 
     glGenBuffers(1, &VBO); 
-    glGenVertexArrays(1, &VAO);
-    
-    glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    unsigned int cubeVAO; 
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)(3*sizeof(float)));
     glEnableVertexAttribArray(1);
+    
+    unsigned int lampVAO;
+    glGenVertexArrays(1, &lampVAO);
+    glBindVertexArray(lampVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6*sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
 
-    auto base = std::filesystem::current_path().parent_path()/"src";
-    Shader ourShader((base/"shader.vs").c_str(), (base/"shader.fs").c_str());
 
-    int width, height, nrChannels;
-    unsigned char *data = stbi_load((base/"container.jpg").c_str(), &width, &height, &nrChannels, 0);
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    if(data) {
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-        glGenerateMipmap(GL_TEXTURE_2D);
-    } else {
-        std::cout <<  "Failed to load texture" << std::endl;
-    }
-    stbi_image_free(data);
+    auto srcPath = std::filesystem::current_path().parent_path()/"src";
+    Shader cubeShader((srcPath/"shaders/cube.vs").c_str(), (srcPath/"shaders/cube.fs").c_str());
+    Shader lampShader((srcPath/"shaders/lamp.vs").c_str(), (srcPath/"shaders/lamp.fs").c_str());
+
+    //shaders
+    glm::mat4 projection = glm::mat4(1.0f);
+    projection = glm::perspective(glm::radians(45.0f), (float)window.getSize().x/(float)window.getSize().y, 0.01f, 100.0f);
+    cubeShader.use();
+    cubeShader.setMat4("projection", projection);
+    lampShader.use();
+    lampShader.setMat4("projection", projection);
+
+    Camera camera(glm::vec3(0.0f, 0.0f, 3.0f), glm::vec3(0.0f, 1.0f, 0.0f) , -90.0f, 0.0f);
 
     // run the main loop
-    bool running = true;
-    float red = 1.0f, green = 1.0f, blue = 1.0f; 
     sf::Clock time;
+    bool running = true;
     while (running)
     {
         // handle events
-        while (const std::optional event = window.pollEvent())
-        {
-            if (event->is<sf::Event::Closed>())
-            {
+        float currentFrame = time.getElapsedTime().asSeconds();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
+        //window.setMouseCursorGrabbed(true);
+        while (const std::optional event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>()){
                 // end the program
                 running = false;
             }
-            else if (const auto* resized = event->getIf<sf::Event::Resized>())
-            {
+            if (const auto* resized = event->getIf<sf::Event::Resized>()){
                 // adjust the viewport when the window is resized
                 glViewport(0, 0, resized->size.x, resized->size.y);
             }
+            if(const auto* mouse = event->getIf<sf::Event::MouseMoved>()){
+                camera.processMouse((float)window.getSize().x, (float)window.getSize().y, mouse->position.x, mouse->position.y);
+            }
         }
+        camera.processKeyboard(deltaTime);
+        sf::Mouse::setPosition(sf::Vector2i(window.getSize().x/2, window.getSize().y/2), window);
+
         // clear color
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         
         // clear the buffers
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // draw...
-        ourShader.use();
-        ourShader.setFloat("time", sin(time.getElapsedTime().asSeconds()));
+    
+    
+        glm::vec3 lightPos = glm::vec3(2.0f * sin(time.getElapsedTime().asSeconds()*0.5f), sin(time.getElapsedTime().asSeconds()/3.0f), 2.0f * cos(time.getElapsedTime().asSeconds()*0.5f));
+        //cube
+        cubeShader.use();
+        cubeShader.setVec3("cubeColor", 1.0f, 0.5f, 0.31f);
+        cubeShader.setVec3("lightColor", 1.0f, 1.0f, 1.0f);   
+        cubeShader.setVec3("lightPos", lightPos.x, lightPos.y, lightPos.z);
+        cubeShader.setVec3("viewPos", camera.Position.x, camera.Position.y, camera.Position.z);
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 view = glm::mat4(1.0f);
+        view = camera.getLookAt();
+        cubeShader.setMat4("model", model);
+        cubeShader.setMat4("view", view);
+        glBindVertexArray(cubeVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
 
-        gradientTriangleVerticeOne(vertices);
-        gradientTriangleVerticeTwo(vertices);
-        gradientTriangleVerticeThree(vertices);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        // lamp
+        lampShader.use();
+        model = glm::translate(model, lightPos);
+        model = glm::scale(model, glm::vec3(0.2f));
+        lampShader.setMat4("model", model);
+        lampShader.setMat4("view", view);
+        glBindVertexArray(lampVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 36);
 
-        glBindVertexArray(VAO);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
         // end the current frame (internally swaps the front and back buffers)
         window.display();
     }
     window.close();
     
     return 0;
-}
-
-void gradientTriangleVerticeOne(float *vertices) {
-    if(first == 5 && vertices[first] <= 0.0f) {
-        vertices[first] = 0.0f;
-        first = 3;
-    } else if (vertices[first] <= 0.0f) {
-        vertices[first] = 0.0f;
-        first++;
-    } 
-    if(vertices[first] > 0.0f && first != 5) {
-        vertices[first] -= gradientRate;
-        vertices[first+1] += gradientRate;
-    } else if (vertices[first] > 0.0f && first == 5) {
-        vertices[first] -= gradientRate;
-        vertices[first-2] += gradientRate;
-    }
-}
-
-void gradientTriangleVerticeTwo(float *vertices) {
-    if(second == 11 && vertices[second] <= 0.0f) {
-        vertices[second] = 0.0f;
-        second = 9;
-    } else if (vertices[second] <= 0.0f) {
-        vertices[second] = 0.0f;
-        second++;
-    } 
-    if(vertices[second] > 0.0f && second != 11) {
-        vertices[second] -= gradientRate;
-        vertices[second+1] += gradientRate;
-    } else if (vertices[second] > 0.0f && second == 11) {
-        vertices[second] -= gradientRate;
-        vertices[second-2] += gradientRate;
-    }
-}
-
-void gradientTriangleVerticeThree(float *vertices) {
-    if(third == 17 && vertices[third] <= 0.0f) {
-        vertices[third] = 0.0f;
-        third = 15;
-    } else if (vertices[third] <= 0.0f) {
-        vertices[third] = 0.0f;
-        third++;
-    } 
-    if(vertices[third] > 0.0f && third != 17) {
-        vertices[third] -= gradientRate;
-        vertices[third+1] += gradientRate;
-    } else if (vertices[third] > 0.0f && third == 17) {
-        vertices[third] -= gradientRate;
-        vertices[third-2] += gradientRate;
-    }
 }
